@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="de" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <title>PipeAlert Pro - B2B Water Risk Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            900: '#0c4a6e',
+                        },
+                        iosDark: '#000000',
+                        iosCard: '#1c1c1e',
+                        iosCardBorder: 'rgba(255, 255, 255, 0.08)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body { 
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        /* Safe area support for real mobile viewports */
+        .pb-safe {
+            padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+        }
+
+        /* iOS glassmorphism & subtle shadows */
+        .ios-glass {
+            background: rgba(28, 28, 30, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ios-card {
+            background: #1c1c1e;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        .glow-brand {
+            box-shadow: 0 0 20px -3px rgba(14, 165, 233, 0.35);
+        }
+
+        .glow-danger {
+            box-shadow: 0 0 25px -3px rgba(239, 68, 68, 0.45);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="h-dvh w-full bg-slate-950 text-slate-100 flex justify-center items-center overflow-hidden antialiased">
+
+    <!-- Native Mobile Web App Viewport Container -->
+    <div class="w-full max-w-lg h-dvh bg-slate-950 flex flex-col relative overflow-hidden shadow-2xl">
+
+        <!-- App Top Bar Header -->
+        <header class="ios-glass z-20 px-4 pt-4 pb-3 border-b border-slate-800/80 shrink-0">
+            <div class="flex items-center justify-between">
+                <!-- Brand & Location Selector -->
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-400 flex items-center justify-center text-white shadow-md glow-brand">
+                        <i class="fa-solid fa-droplet text-sm"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                            <i class="fa-solid fa-building-user text-[10px] text-brand-400"></i>
+                            <select id="propertySelect" onchange="switchProperty(this.value)" class="bg-transparent text-slate-300 focus:outline-none font-medium cursor-pointer">
+                                <option value="hotel_alps" class="bg-slate-900 text-white">Grand Hotel Bellevue (St. Moritz)</option>
+                                <option value="office_park" class="bg-slate-900 text-white">Business Park Zurich West</option>
+                                <option value="residence_sg" class="bg-slate-900 text-white">Seniorenresidenz St. Gallen</option>
+                            </select>
+                        </div>
+                        <h1 class="font-bold text-sm text-white tracking-tight leading-none mt-0.5">PipeAlert Pro</h1>
+                    </div>
+                </div>
+
+                <!-- Simulation & Notification Actions -->
+                <div class="flex items-center gap-2">
+                    <button onclick="triggerSimulatedLeak()" title="Leckage Simulieren" class="w-8 h-8 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition active:scale-95">
+                        <i class="fa-solid fa-flask text-xs"></i>
+                    </button>
+                    <button onclick="openDispatchModal()" title="Pikett Rufen" class="w-8 h-8 rounded-full bg-brand-500/20 border border-brand-500/40 text-brand-400 flex items-center justify-center hover:bg-brand-500/30 transition active:scale-95 relative">
+                        <i class="fa-solid fa-phone-flip text-xs"></i>
+                        <span id="headerAlertPing" class="hidden absolute top-0 right-0 w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Global Risk Banner Indicator -->
+            <div id="statusPill" class="mt-2.5 py-1 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs transition-all">
+                <span class="flex items-center gap-2 text-emerald-400 font-medium text-[11px]">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Systemstatus: <strong id="statusText" class="font-bold">Optimal</strong>
+                </span>
+                <span id="statusSubtext" class="text-[10px] text-slate-400">12/12 Sensoren aktiv</span>
+            </div>
+        </header>
+
+        <!-- Live Alert Notification Banner (Floats over content when triggered) -->
+        <div id="activeAlertBanner" class="hidden shrink-0 p-3 bg-gradient-to-r from-rose-950/90 to-red-900/90 border-b border-rose-500/40 text-white glow-danger transition-all duration-300 z-30">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+                <div class="flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-triangle-exclamation text-xs animate-bounce"></i>
+                    </span>
+                    <span class="text-xs font-bold text-rose-200">MIKROLECK DETEKTIERT</span>
+                </div>
+                <span class="text-[9px] bg-rose-500/30 text-rose-200 px-1.5 py-0.5 rounded font-mono font-bold">STUFE 1</span>
+            </div>
+            <p class="text-[11px] text-rose-100/90 leading-tight mb-2">
+                <strong>Strang 2B (OG 2 - Zimmer 201-215):</strong> Kontinuierlicher Fluss 24.8 L/Min seit 14 Min.
+            </p>
+            <div class="flex items-center gap-2">
+                <button onclick="applyAutoPressureReduction()" class="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-[11px] rounded-lg transition active:scale-95 shadow">
+                    <i class="fa-solid fa-gauge-high mr-1"></i> Druck drosseln (-70%)
+                </button>
+                <button onclick="dismissAlert()" class="px-3 py-1.5 bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-[11px] rounded-lg border border-slate-700">
+                    Stummschalten
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Scrollable Content Container -->
+        <main class="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
+            </div>
+        </div>
+
+        <!-- Main Scrollable Content Container -->
+        <main class="flex-1 overflow-y-auto p-4 space-y-4 pb-20">
+
+            <!-- TAB 1: ÜBERSICHT (HOME DASHBOARD) -->
+            <div id="tab-dashboard" class="tab-content space-y-4">
+
+                <!-- Pipe Health Score Radial Card -->
+                <div class="ios-card p-4 rounded-2xl relative overflow-hidden">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <span class="text-xs text-slate-400 font-medium">Pipe Health Score</span>
+                            <h2 class="text-xl font-bold text-white tracking-tight">Leitungszustand</h2>
+                        </div>
+                        <span id="healthBadge" class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
+                            Exzellent
+                        </span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <!-- Score Display -->
+                        <div class="flex items-baseline gap-1">
+                            <span id="metricHealth" class="text-5xl font-extrabold text-white tracking-tight">96</span>
+                            <span class="text-sm font-semibold text-slate-500">/ 100</span>
+                        </div>
+
+                        <!-- Mini Stats breakdown -->
+                        <div class="space-y-1 text-right text-xs">
+                            <div class="text-slate-400">Wandstärke: <span class="text-slate-200 font-semibold">100% OK</span></div>
+                            <div class="text-slate-400">Kalk/Biofilm: <span class="text-emerald-400 font-semibold">Minimal</span></div>
+                            <div class="text-slate-400">Mikrovibration: <span class="text-emerald-400 font-semibold">In Norm</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
+                        <div id="healthProgressBar" class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-full w-[96%] transition-all duration-500"></div>
+                    </div>
+                </div>
+
+                <!-- Quick Metrics Carousel Grid -->
+                <div class="grid grid-cols-2 gap-3">
+                    <!-- Current Flow Rate -->
+                    <div class="ios-card p-3.5 rounded-2xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 mb-1">
+                            <span class="text-xs">Durchfluss</span>
+                            <i class="fa-solid fa-water text-brand-400 text-xs"></i>
+                        </div>
+                        <div class="my-1">
+                            <span id="metricFlow" class="text-2xl font-bold text-white tracking-tight">12.4</span>
+                            <span class="text-xs text-slate-400">L/Min</span>
+                        </div>
+                        <span class="text-[10px] text-slate-400">Ultraschall Hauptstrang</span>
+                    </div>
+
+                    <!-- System Pressure -->
+                    <div class="ios-card p-3.5 rounded-2xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 mb-1">
+                            <span class="text-xs">Systemdruck</span>
+                            <i class="fa-solid fa-gauge-high text-indigo-400 text-xs"></i>
+                        </div>
+                        <div class="my-1">
+                            <span id="metricPressure" class="text-2xl font-bold text-white tracking-tight">4.2</span>
+                            <span class="text-xs text-slate-400">Bar</span>
+                        </div>
+                        <span id="pressureStatusText" class="text-[10px] text-emerald-400 font-medium">Ventil 100% offen</span>
+                    </div>
+                </div>
+
+                <!-- Live Flow & Pressure Telemetry Chart -->
+                <div class="ios-card p-4 rounded-2xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Echtzeit-Telemetrie</h3>
+                            <p class="text-[11px] text-slate-400">Ultraschall-Durchfluss 24h</p>
+                        </div>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-brand-500/10 text-brand-400 font-mono">Live</span>
+                    </div>
+                    <div class="h-40 w-full mt-2">
+                        <canvas id="flowChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Interactive Building Strands Overview (Drilldown list) -->
+                <div class="ios-card p-4 rounded-2xl space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Gebäude-Strang-Status</h3>
+                            <p class="text-[11px] text-slate-400">Tippe auf einen Strang für Details</p>
+                        </div>
+                        <span class="text-[11px] text-brand-400 font-medium">4 Zonen</span>
+                    </div>
+
+                    <div class="space-y-2">
+                        <!-- Strang 1 -->
+                        <div onclick="openStrangDetail('Strang 1A (UG - Gastro)', 'Edelstahl', '3.2mm', 'Gastro-Küche', 'In Ordnung', '0.0 L/min (Ruhe)')" class="p-3 bg-slate-900/90 hover:bg-slate-800/90 rounded-xl border border-slate-800 flex items-center justify-between active:scale-[0.98] transition cursor-pointer group">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                                    <i class="fa-solid fa-utensils text-xs"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-semibold text-white">Strang 1A (UG - Gastro)</div>
+                                    <div class="text-[10px] text-slate-400">Gastroküche • Edelstahl 3.2mm</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-400 group-hover:text-brand-400 transition">
+                                <span class="text-[10px] font-medium hidden sm:inline">Details</span>
+                                <i class="fa-solid fa-chevron-right text-xs"></i>
+                            </div>
+                        </div>
+
+                        <!-- Strang 2 (Target for alert demo) -->
+                        <div id="strang2Card" onclick="openStrangDetail('Strang 2B (OG 2 - Trakt B)', 'Kupfer', '1.8mm', 'Hotelzimmer 201-215', 'Normal', '4.8 L/min')" class="p-3 bg-slate-900/90 hover:bg-slate-800/90 rounded-xl border border-slate-800 flex items-center justify-between active:scale-[0.98] transition cursor-pointer group">
+                            <div class="flex items-center gap-3">
+                                <div id="strang2Icon" class="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-400 flex items-center justify-center shrink-0">
+                                    <i class="fa-solid fa-bed text-xs"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-semibold text-white">Strang 2B (OG 2 - Trakt B)</div>
+                                    <div id="strang2Subtext" class="text-[10px] text-slate-400">Zimmer 201-215 • Kupfer 1.8mm</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span id="strang2Badge" class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">OK</span>
+                                <i class="fa-solid fa-chevron-right text-xs text-slate-500 group-hover:text-brand-400 transition"></i>
+                            </div>
+                        </div>
+
+                        <!-- Strang 3 -->
+                        <div onclick="openStrangDetail('Strang 3C (OG 4 - Spa)', 'PEX-Verbund', '2.4mm', 'Spa & Wellness', 'In Ordnung', '7.6 L/min')" class="p-3 bg-slate-900/90 hover:bg-slate-800/90 rounded-xl border border-slate-800 flex items-center justify-between active:scale-[0.98] transition cursor-pointer group">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center shrink-0">
+                                    <i class="fa-solid fa-spa text-xs"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-semibold text-white">Strang 3C (OG 4 - Spa)</div>
+                                    <div class="text-[10px] text-slate-400">Wellnessbereich • PEX 2.4mm</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-400 group-hover:text-brand-400 transition">
+                                <span class="text-[10px] font-medium hidden sm:inline">Details</span>
+                                <i class="fa-solid fa-chevron-right text-xs"></i>
+                            </div>
+                        </div>
+
+                        <!-- Strang 4 -->
+                        <div onclick="openStrangDetail('Strang 4D (Warmwasser Zirkulation)', 'Verzinkter Stahl', '3.0mm', 'Zentralheizung', 'In Ordnung', '2.1 L/min')" class="p-3 bg-slate-900/90 hover:bg-slate-800/90 rounded-xl border border-slate-800 flex items-center justify-between active:scale-[0.98] transition cursor-pointer group">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+                                    <i class="fa-solid fa-fire text-xs"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-semibold text-white">Strang 4D (Zirkulation)</div>
+                                    <div class="text-[10px] text-slate-400">Warmwasser • Stahl 3.0mm</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-400 group-hover:text-brand-400 transition">
+                                <span class="text-[10px] font-medium hidden sm:inline">Details</span>
+                                <i class="fa-solid fa-chevron-right text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: STRÄNGE & VIRTUAL SUB-METERING (NILM) -->
+            <div id="tab-strang" class="tab-content hidden space-y-4">
+                <div class="ios-card p-4 rounded-2xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-white">Virtual Sub-Metering</h3>
+                            <p class="text-[11px] text-slate-400">KI-Geräteerkennung via Akustik</p>
+                        </div>
+                        <span class="px-2.5 py-1 bg-brand-500/10 text-brand-400 border border-brand-500/20 rounded-full text-[10px] font-bold">
+                            Edge-AI Aktiv
+                        </span>
+                    </div>
+
+                    <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                        Ein einziger Außen-Ultraschallsensor erkennt spezifische Verbrauchsmuster durch KI-Schallwellen-Analyse.
+                    </p>
+
+                    <!-- NILM Device Cards -->
+                    <div class="space-y-3">
+                        <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="font-semibold text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-soap text-brand-400"></i> Gastro-Spülmaschine 1
+                                </span>
+                                <span class="text-slate-400 font-mono">340 L / Tag</span>
+                            </div>
+                            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div class="bg-brand-500 h-full w-[65%]"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-slate-400">
+                                <span>Status: Normaler Spülgang</span>
+                                <span class="text-emerald-400 font-medium">Kein Auslaufen</span>
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="font-semibold text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-toilet text-indigo-400"></i> WC-Zisternen Trakt A
+                                </span>
+                                <span class="text-slate-400 font-mono">890 L / Tag</span>
+                            </div>
+                            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div class="bg-amber-500 h-full w-[82%]"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-400">Status: Leichtes Nachlaufen</span>
+                                <span class="text-amber-400 font-semibold">Toilette 204 prüfen</span>
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="font-semibold text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-shower text-cyan-400"></i> Spa Duschen & Sauna
+                                </span>
+                                <span class="text-slate-400 font-mono">1'420 L / Tag</span>
+                            </div>
+                            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div class="bg-cyan-500 h-full w-[45%]"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-slate-400">
+                                <span>Status: Spitzenbelegung</span>
+                                <span class="text-emerald-400 font-medium">Effizienz 98%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Frequency Wave Graphic -->
+                <div class="ios-card p-4 rounded-2xl">
+                    <h4 class="text-xs font-bold text-white uppercase tracking-wider mb-1">Micro-Acoustic Frequenzband</h4>
+                    <p class="text-[10px] text-slate-400 mb-3">Erkennung von Mikro-Kavitation & Rohrwandschwingung</p>
+                    
+                    <div class="h-24 flex items-end justify-between gap-1 px-1 border-b border-slate-800 pb-1">
+                        <div class="w-2.5 bg-brand-500/40 rounded-t h-[30%]"></div>
+                        <div class="w-2.5 bg-brand-500/60 rounded-t h-[55%]"></div>
+                        <div class="w-2.5 bg-brand-500 rounded-t h-[80%]"></div>
+                        <div class="w-2.5 bg-brand-500/50 rounded-t h-[40%]"></div>
+                        <div class="w-2.5 bg-cyan-500/70 rounded-t h-[65%]"></div>
+                        <div class="w-2.5 bg-cyan-500 rounded-t h-[95%] animate-pulse"></div>
+                        <div class="w-2.5 bg-brand-500/60 rounded-t h-[45%]"></div>
+                        <div class="w-2.5 bg-brand-500/30 rounded-t h-[25%]"></div>
+                        <div class="w-2.5 bg-indigo-500/50 rounded-t h-[35%]"></div>
+                        <div class="w-2.5 bg-brand-500/80 rounded-t h-[75%]"></div>
+                    </div>
+                    <div class="flex justify-between text-[9px] text-slate-500 mt-2 font-mono">
+                        <span>20kHz (Fluss)</span>
+                        <span>100kHz (Partikel)</span>
+                        <span>500kHz (Mikromuster)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: DRUCKSTEUERUNG & ESKALATION -->
+            <div id="tab-escalation" class="tab-content hidden space-y-4">
+                <!-- Manual Slider Controls -->
+                <div class="ios-card p-4 rounded-2xl space-y-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-white">Smart-Ventil & Druckkonsole</h3>
+                        <p class="text-[11px] text-slate-400">Echtzeit-Ansteuerung des M-Bus Ventils</p>
+                    </div>
+
+                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-semibold text-slate-300">Soll-Druck im Leitungsnetz</span>
+                            <span id="sliderValue" class="text-base font-extrabold text-brand-400 font-mono">4.2 Bar</span>
+                        </div>
+                        
+                        <input type="range" id="pressureSlider" min="1.0" max="5.0" step="0.1" value="4.2" oninput="updatePressureSlider(this.value)" class="w-full accent-brand-500 cursor-pointer">
+                        
+                        <div class="flex justify-between text-[9px] text-slate-500 font-mono">
+                            <span>1.0 Bar (Not-Drossel)</span>
+                            <span>2.8 Bar (Nacht)</span>
+                            <span>5.0 Bar (Max)</span>
+                        </div>
+                    </div>
+
+                    <!-- Toggle Night Reduction -->
+                    <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between">
+                        <div>
+                            <div class="text-xs font-semibold text-white">Automatischer Nachtmodus</div>
+                            <div class="text-[10px] text-slate-400">Senkt den Druck ab 01:00 Uhr auf 2.8 Bar</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked class="sr-only peer">
+                            <div class="w-10 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Step-by-Step Escalation Cascade -->
+                <div class="ios-card p-4 rounded-2xl space-y-3">
+                    <h3 class="text-xs font-bold text-white uppercase tracking-wider">Automatisches Regelwerk</h3>
+
+                    <div class="space-y-2.5 text-xs">
+                        <div class="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex items-start gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                            <div>
+                                <h4 class="font-bold text-white">Stufe 1: Instant App-Alarm</h4>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Benachrichtigt Haustechniker bei Dauerfluss >15 Min.</p>
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex items-start gap-3">
+                            <span class="w-6 h-6 rounded-full bg-amber-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                            <div>
+                                <h4 class="font-bold text-white">Stufe 2: Druck-Drosselung (-70%)</h4>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Reduziert Druck von 4.2 auf 1.3 Bar bei unbeantwortetem Alarm. Schützt die Substanz.</p>
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex items-start gap-3">
+                            <span class="w-6 h-6 rounded-full bg-rose-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                            <div>
+                                <h4 class="font-bold text-white">Stufe 3: Automatische Pikett-Aktivierung</h4>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Bucht Sanitär-Partner mit exakten Strang-Koordinaten.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: VERSICHERUNG & AUDIT LOG -->
+            <div id="tab-insurance" class="tab-content hidden space-y-4">
+                <div class="ios-card p-4 rounded-2xl space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-white">Telematik-Versicherung</h3>
+                            <p class="text-[11px] text-slate-400">Automatische Prämien-Optimierung</p>
+                        </div>
+                        <span class="px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-bold">
+                            -18.5% Rabatt
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                        <div class="p-3 bg-slate-900 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-400">Jahresprämie</span>
+                            <div class="text-base font-bold text-white mt-0.5">CHF 12'450.–</div>
+                            <span class="text-[9px] text-emerald-400 mt-1 block">Ersparnis: CHF 2'840</span>
+                        </div>
+                        <div class="p-3 bg-slate-900 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-400">Selbstbehalt</span>
+                            <div class="text-base font-bold text-emerald-400 mt-0.5">CHF 0.–</div>
+                            <span class="text-[9px] text-slate-400 mt-1 block">Dank PipeAlert</span>
+                        </div>
+                    </div>
+
+                    <button onclick="downloadCertificate()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-file-pdf text-rose-400"></i> Audit-Zertifikat herunterladen (PDF)
+                    </button>
+                </div>
+
+                <!-- Revisionssicheres Logbuch -->
+                <div class="ios-card p-4 rounded-2xl">
+                    <h4 class="text-xs font-bold text-white uppercase tracking-wider mb-2">Revisionssicheres Instandhaltungs-Log</h4>
+                    
+                    <div class="space-y-2 text-[11px]">
+                        <div class="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                            <div>
+                                <div class="font-semibold text-white">Nacht-Drucksenkung durchgeführt</div>
+                                <div class="text-[9px] text-slate-400 font-mono">2026-08-27 01:00 • Hauptstrang</div>
+                            </div>
+                            <span class="text-[9px] bg-emerald-500/10 text-emerald-400 font-bold px-1.5 py-0.5 rounded">Validiert</span>
+                        </div>
+
+                        <div class="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                            <div>
+                                <div class="font-semibold text-white">Wandstärke-Ultraschall-Scan</div>
+                                <div class="text-[9px] text-slate-400 font-mono">2026-08-25 14:02 • Strang 2B</div>
+                            </div>
+                            <span class="text-[9px] bg-emerald-500/10 text-emerald-400 font-bold px-1.5 py-0.5 rounded">Validiert</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- iOS Bottom Tab Bar Navigation -->
+        <nav class="ios-glass absolute bottom-0 left-0 right-0 z-30 px-2 pt-2 pb-safe border-t border-slate-800 flex justify-around items-center">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-brand-400 transition active:scale-95">
+                <i class="fa-solid fa-house text-base"></i>
+                <span class="text-[10px] font-medium">Übersicht</span>
+            </button>
+            <button onclick="switchTab('strang')" id="nav-strang" class="nav-btn flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition active:scale-95">
+                <i class="fa-solid fa-microchip text-base"></i>
+                <span class="text-[10px] font-medium">Stränge & KI</span>
+            </button>
+            <button onclick="switchTab('escalation')" id="nav-escalation" class="nav-btn flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition active:scale-95 relative">
+                <i class="fa-solid fa-sliders text-base"></i>
+                <span class="text-[10px] font-medium">Druck</span>
+                <span id="tabAlertBadge" class="hidden absolute top-1 right-3 w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            </button>
+            <button onclick="switchTab('insurance')" id="nav-insurance" class="nav-btn flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-slate-400 hover:text-slate-200 transition active:scale-95">
+                <i class="fa-solid fa-shield-halved text-base"></i>
+                <span class="text-[10px] font-medium">Versicherung</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <!-- Strang Detail Modal / Bottom Drawer -->
+    <div id="strangDetailModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-all">
+        <div class="ios-card w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 border border-slate-800 shadow-2xl relative space-y-4">
+            <div class="w-12 h-1.5 bg-slate-700 rounded-full mx-auto -mt-1 mb-2 sm:hidden"></div>
+            
+            <button onclick="closeStrangDetail()" class="absolute top-4 right-4 text-slate-400 hover:text-white w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
+                    <i class="fa-solid fa-network-wired text-base"></i>
+                </div>
+                <div>
+                    <h3 id="modalStrangTitle" class="font-bold text-white text-base leading-tight">Strang Details</h3>
+                    <p id="modalStrangSubtitle" class="text-xs text-slate-400">Ultraschall-Echtzeitanalyse</p>
+                </div>
+            </div>
+
+            <!-- Diagnostics Grid -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="p-3 bg-slate-900 rounded-xl border border-slate-800">
+                    <span class="text-[10px] text-slate-400">Material & Stärke</span>
+                    <div id="modalMaterial" class="font-semibold text-white mt-0.5">Kupfer (1.8mm)</div>
+                </div>
+                <div class="p-3 bg-slate-900 rounded-xl border border-slate-800">
+                    <span class="text-[10px] text-slate-400">Aktueller Fluss</span>
+                    <div id="modalFlow" class="font-semibold text-brand-400 mt-0.5">4.8 L/Min</div>
+                </div>
+            </div>
+
+            <!-- Quick Valve Control -->
+            <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-white">Strang-Absperrventil</div>
+                    <div class="text-[10px] text-slate-400">Elektrisches M-Bus Ventil für diesen Trakt</div>
+                </div>
+                <button onclick="toggleStrangValve(this)" class="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 font-bold text-xs rounded-lg border border-emerald-500/30">
+                    Offen (100%)
+                </button>
+            </div>
+
+            <button onclick="closeStrangDetail()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-xl transition">
+                Schliessen
+            </button>
+        </div>
+    </div>
+
+    <!-- Dispatch Plumber Modal -->
+    <div id="dispatchModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="ios-card w-full max-w-sm rounded-2xl p-5 border border-slate-800 shadow-2xl relative space-y-4">
+            <button onclick="closeDispatchModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-base"></i>
+            </button>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
+                    <i class="fa-solid fa-truck-fast text-base"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-white text-sm">Sanitär-Pikett Rufen</h3>
+                    <p class="text-[11px] text-slate-400">Automatisierter 24/7 Notfall-Auftrag</p>
+                </div>
+            </div>
+
+            <form onsubmit="handleDispatchSubmit(event)" class="space-y-3">
+                <div>
+                    <label class="text-[10px] text-slate-400 block mb-1">Partner-Sanitärbetrieb</label>
+                    <input type="text" readonly value="Sanitär-24 Notdienst St. Moritz (Partner)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-300">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-400 block mb-1">Telemetrie-Fehlerbericht</label>
+                    <textarea rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-300">Mikroleckage an Strang 2B (Obergeschoss 2). Fluss: 24.8 L/min. Druckdrosselung aktiv.</textarea>
+                </div>
+                <div class="p-2.5 bg-brand-500/10 border border-brand-500/20 rounded-lg text-[10px] text-brand-300">
+                    <i class="fa-solid fa-shield-check mr-1"></i> Kostenübernahme durch Gebäudeversicherung garantiert.
+                </div>
+                <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs rounded-xl transition shadow glow-brand">
+                    Pikett-Auftrag verbindlich senden
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let currentTab = 'dashboard';
+        let alertActive = false;
+        let flowChartInstance = null;
+        let currentPropertyKey = 'hotel_alps';
+
+        const propertyData = {
+            hotel_alps: {
+                name: "Grand Hotel Bellevue (St. Moritz)",
+                health: 96,
+                healthBadge: "Exzellent",
+                healthBadgeClass: "px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold",
+                healthBarClass: "bg-gradient-to-r from-emerald-500 to-cyan-400 h-full w-[96%] transition-all duration-500",
+                flow: "12.4",
+                pressure: "4.2",
+                statusText: "Optimal",
+                statusSubtext: "12/12 Sensoren aktiv",
+                statusPillClass: "mt-2.5 py-1 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs transition-all",
+                chartData: [3, 2, 6, 14, 11, 12.4, 15, 8],
+                strands: [
+                    { title: "Strang 1A (UG - Gastro)", material: "Edelstahl", thickness: "3.2mm", zone: "Gastro-Küche", status: "In Ordnung", flow: "0.0 L/min (Ruhe)", sub: "Gastroküche • Edelstahl 3.2mm", icon: "fa-utensils", color: "emerald" },
+                    { id: "strang2Card", title: "Strang 2B (OG 2 - Trakt B)", material: "Kupfer", thickness: "1.8mm", zone: "Hotelzimmer 201-215", status: "Normal", flow: "4.8 L/min", sub: "Zimmer 201-215 • Kupfer 1.8mm", icon: "fa-bed", color: "brand" },
+                    { title: "Strang 3C (OG 4 - Spa)", material: "PEX-Verbund", thickness: "2.4mm", zone: "Spa & Wellness", status: "In Ordnung", flow: "7.6 L/min", sub: "Wellnessbereich • PEX 2.4mm", icon: "fa-spa", color: "cyan" },
+                    { title: "Strang 4D (Zirkulation)", material: "Verzinkter Stahl", thickness: "3.0mm", zone: "Zentralheizung", status: "In Ordnung", flow: "2.1 L/min", sub: "Warmwasser • Stahl 3.0mm", icon: "fa-fire", color: "amber" }
+                ]
+            },
+            office_park: {
+                name: "Business Park Zurich West",
+                health: 88,
+                healthBadge: "Gut",
+                healthBadgeClass: "px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold",
+                healthBarClass: "bg-gradient-to-r from-cyan-500 to-indigo-500 h-full w-[88%] transition-all duration-500",
+                flow: "34.2",
+                pressure: "3.8",
+                statusText: "Gut",
+                statusSubtext: "18/18 Sensoren aktiv",
+                statusPillClass: "mt-2.5 py-1 px-3 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-between text-xs transition-all",
+                chartData: [1, 1, 40, 52, 48, 34.2, 45, 12],
+                strands: [
+                    { title: "Strang A1 (EG - Server & Klima)", material: "Edelstahl", thickness: "4.0mm", zone: "Kühlkreislauf Datacenter", status: "In Ordnung", flow: "18.5 L/min", sub: "Rechenzentrum • Edelstahl 4.0mm", icon: "fa-server", color: "indigo" },
+                    { title: "Strang B2 (OG 1-3 Büros)", material: "Kupfer", thickness: "2.2mm", zone: "Sanitär & Kaffeeküchen", status: "In Ordnung", flow: "8.2 L/min", sub: "Büros Trakt B • Kupfer 2.2mm", icon: "fa-briefcase", color: "brand" },
+                    { title: "Strang C3 (OG 4-6 Büros)", material: "PEX-Verbund", thickness: "2.0mm", zone: "Sanitär & Teeküchen", status: "In Ordnung", flow: "5.1 L/min", sub: "Büros Trakt C • PEX 2.0mm", icon: "fa-building", color: "cyan" },
+                    { title: "Strang D4 (UG Kantine)", material: "Verzinkter Stahl", thickness: "3.5mm", zone: "Großküche & Mensa", status: "In Ordnung", flow: "2.4 L/min", sub: "Kantine • Stahl 3.5mm", icon: "fa-utensils", color: "amber" }
+                ]
+            },
+            residence_sg: {
+                name: "Seniorenresidenz St. Gallen",
+                health: 92,
+                healthBadge: "Sehr gut",
+                healthBadgeClass: "px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold",
+                healthBarClass: "bg-gradient-to-r from-emerald-500 to-brand-500 h-full w-[92%] transition-all duration-500",
+                flow: "8.7",
+                pressure: "4.0",
+                statusText: "Optimal",
+                statusSubtext: "8/8 Sensoren aktiv",
+                statusPillClass: "mt-2.5 py-1 px-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs transition-all",
+                chartData: [2, 1, 5, 12, 9, 8.7, 10, 4],
+                strands: [
+                    { title: "Strang 1 (Pflegebereich West)", material: "Edelstahl", thickness: "2.8mm", zone: "Wohnungen 101-112", status: "In Ordnung", flow: "3.1 L/min", sub: "Trakt West • Edelstahl 2.8mm", icon: "fa-heart-pulse", color: "emerald" },
+                    { title: "Strang 2 (Pflegebereich Ost)", material: "Kupfer", thickness: "2.0mm", zone: "Wohnungen 201-212", status: "In Ordnung", flow: "2.9 L/min", sub: "Trakt Ost • Kupfer 2.0mm", icon: "fa-user-nurse", color: "brand" },
+                    { title: "Strang 3 (Zentralküche)", material: "Edelstahl", thickness: "3.5mm", zone: "Großküche & Wäscherei", status: "In Ordnung", flow: "2.7 L/min", sub: "Küche/Wäscherei • Edelstahl 3.5mm", icon: "fa-shirt", color: "cyan" },
+                    { title: "Strang 4 (Zirkulationspumpe)", material: "Verzinkter Stahl", thickness: "2.8mm", zone: "Zirkulation WW", status: "In Ordnung", flow: "0.0 L/min", sub: "Warmwasser • Stahl 2.8mm", icon: "fa-fire", color: "amber" }
+                ]
+            }
+        };
+
+        window.onload = function() {
+            initFlowChart();
+        };
+
+        // Switch iOS Bottom Tabs
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-brand-400');
+                btn.classList.add('text-slate-400');
+            });
+
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`nav-${tabId}`);
+            activeBtn.classList.add('text-brand-400');
+            activeBtn.classList.remove('text-slate-400');
+
+            currentTab = tabId;
+        }
+
+        // Initialize Telemetry Chart
+        function initFlowChart() {
+            const ctx = document.getElementById('flowChart').getContext('2d');
+            const hours = ['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00'];
+            const data = [3, 2, 6, 14, 11, 12.4, 15, 8];
+
+            flowChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: hours,
+                    datasets: [{
+                        label: 'Durchfluss (L/Min)',
+                        data: data,
+                        borderColor: '#0ea5e9',
+                        backgroundColor: 'rgba(14, 165, 233, 0.12)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#64748b', font: { size: 9 } } },
+                        y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#64748b', font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        // Simulated Leak Demo Flow for SwissSkills Pitch
+        function triggerSimulatedLeak() {
+            alertActive = true;
+            document.getElementById('activeAlertBanner').classList.remove('hidden');
+            document.getElementById('headerAlertPing').classList.remove('hidden');
+            document.getElementById('tabAlertBadge').classList.remove('hidden');
+
+            // Status Pill Update
+            const pill = document.getElementById('statusPill');
+            pill.className = 'mt-2.5 py-1 px-3 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-between text-xs transition-all animate-pulse';
+            document.getElementById('statusText').textContent = 'Warnung: Mikroleck';
+            document.getElementById('statusText').className = 'font-bold text-rose-400';
+
+            // Metrics Update
+            document.getElementById('metricFlow').textContent = '24.8';
+            document.getElementById('metricFlow').className = 'text-2xl font-bold text-rose-400 tracking-tight animate-pulse';
+            document.getElementById('metricHealth').textContent = '74';
+            document.getElementById('healthBadge').textContent = 'Achtung';
+            document.getElementById('healthBadge').className = 'px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold';
+            document.getElementById('healthProgressBar').style.width = '74%';
+            document.getElementById('healthProgressBar').className = 'bg-gradient-to-r from-rose-500 to-amber-500 h-full transition-all duration-500';
+
+            // Highlight Strang 2
+            const s2Card = document.getElementById('strang2Card');
+            s2Card.className = 'p-3 bg-rose-950/40 rounded-xl border border-rose-500/50 flex items-center justify-between active:scale-[0.98] transition cursor-pointer glow-danger';
+            document.getElementById('strang2Badge').className = 'px-2 py-0.5 rounded bg-rose-500/30 text-rose-300 text-[10px] font-bold animate-pulse';
+            document.getElementById('strang2Badge').textContent = 'Leckage!';
+
+            if (flowChartInstance) {
+                flowChartInstance.data.datasets[0].data[5] = 24.8;
+                flowChartInstance.data.datasets[0].borderColor = '#f43f5e';
+                flowChartInstance.update();
+            }
+
+            showToast('Alarm ausgelöst: Mikroleck an Strang 2B detektiert!');
+        }
+
+        // Auto Pressure Reduction (-70%)
+        function applyAutoPressureReduction() {
+            document.getElementById('metricPressure').textContent = '1.3';
+            document.getElementById('pressureStatusText').textContent = 'Not-Drosselung (-70%)';
+            document.getElementById('pressureStatusText').className = 'text-[10px] text-amber-400 font-bold';
+
+            document.getElementById('metricFlow').textContent = '3.2';
+            document.getElementById('metricFlow').className = 'text-2xl font-bold text-white tracking-tight';
+
+            showToast('Druck erfolgreich auf 1.3 Bar gedrosselt. Wasseraustritt um 85% minimiert.');
+        }
+
+        function dismissAlert() {
+            document.getElementById('activeAlertBanner').classList.add('hidden');
+        }
+
+        // Slider Handler
+        function updatePressureSlider(val) {
+            document.getElementById('sliderValue').textContent = `${val} Bar`;
+            document.getElementById('metricPressure').textContent = val;
+        }
+
+        // Open Strand Details Modal
+        function openStrangDetail(title, material, thickness, zone, status, flow) {
+            document.getElementById('modalStrangTitle').textContent = title;
+            document.getElementById('modalStrangSubtitle').textContent = `Zone: ${zone}`;
+            document.getElementById('modalMaterial').textContent = `${material} (${thickness})`;
+            document.getElementById('modalFlow').textContent = flow;
+            document.getElementById('strangDetailModal').classList.remove('hidden');
+        }
+
+        function closeStrangDetail() {
+            document.getElementById('strangDetailModal').classList.add('hidden');
+        }
+
+        function toggleStrangValve(btn) {
+            if (btn.textContent.includes('Offen')) {
+                btn.textContent = 'Gedrosselt (30%)';
+                btn.className = 'px-3 py-1.5 bg-amber-500/20 text-amber-400 font-bold text-xs rounded-lg border border-amber-500/30';
+                showToast('Ventil auf 30% gedrosselt.');
+            } else {
+                btn.textContent = 'Offen (100%)';
+                btn.className = 'px-3 py-1.5 bg-emerald-500/20 text-emerald-400 font-bold text-xs rounded-lg border border-emerald-500/30';
+                showToast('Ventil wieder voll geöffnet.');
+            }
+        }
+
+        // Dispatch Modal Handlers
+        function openDispatchModal() {
+            document.getElementById('dispatchModal').classList.remove('hidden');
+        }
+
+        function closeDispatchModal() {
+            document.getElementById('dispatchModal').classList.add('hidden');
+        }
+
+        function handleDispatchSubmit(e) {
+            e.preventDefault();
+            closeDispatchModal();
+            showToast('Pikett-Auftrag übermittelt! Techniker Eintreffen in ~35 Min.');
+        }
+
+        function downloadCertificate() {
+            showToast('Zertifikat "Versicherungs-Audit 2026.pdf" heruntergeladen.');
+        }
+
+        function switchProperty(key) {
+            currentPropertyKey = key;
+            const data = propertyData[key];
+            if (!data) return;
+
+            // Reset Alert State if active
+            if (alertActive) {
+                alertActive = false;
+                document.getElementById('activeAlertBanner').classList.add('hidden');
+                document.getElementById('headerAlertPing').classList.add('hidden');
+                document.getElementById('tabAlertBadge').classList.add('hidden');
+            }
+
+            // Update Metrics
+            document.getElementById('metricHealth').textContent = data.health;
+            document.getElementById('healthBadge').textContent = data.healthBadge;
+            document.getElementById('healthBadge').className = data.healthBadgeClass;
+            document.getElementById('healthProgressBar').className = data.healthBarClass;
+
+            document.getElementById('metricFlow').textContent = data.flow;
+            document.getElementById('metricFlow').className = 'text-2xl font-bold text-white tracking-tight';
+
+            document.getElementById('metricPressure').textContent = data.pressure;
+            document.getElementById('pressureSlider').value = data.pressure;
+            document.getElementById('sliderValue').textContent = `${data.pressure} Bar`;
+            document.getElementById('pressureStatusText').textContent = 'Ventil 100% offen';
+            document.getElementById('pressureStatusText').className = 'text-[10px] text-emerald-400 font-medium';
+
+            // Update Status Banner
+            document.getElementById('statusPill').className = data.statusPillClass;
+            document.getElementById('statusText').textContent = data.statusText;
+            document.getElementById('statusText').className = 'font-bold text-emerald-400';
+            document.getElementById('statusSubtext').textContent = data.statusSubtext;
+
+            // Update Telemetry Chart
+            if (flowChartInstance) {
+                flowChartInstance.data.datasets[0].data = [...data.chartData];
+                flowChartInstance.data.datasets[0].borderColor = '#0ea5e9';
+                flowChartInstance.update();
+            }
+
+            // Update Building Strands Dynamic HTML
+            const strandsContainer = document.querySelector('#tab-dashboard .space-y-2');
+            if (strandsContainer) {
+                strandsContainer.innerHTML = data.strands.map(s => `
+                    <div ${s.id ? `id="${s.id}"` : ''} onclick="openStrangDetail('${s.title}', '${s.material}', '${s.thickness}', '${s.zone}', '${s.status}', '${s.flow}')" class="p-3 bg-slate-900/90 hover:bg-slate-800/90 rounded-xl border border-slate-800 flex items-center justify-between active:scale-[0.98] transition cursor-pointer group">
+                        <div class="flex items-center gap-3">
+                            <div id="${s.id ? 'strang2Icon' : ''}" class="w-8 h-8 rounded-lg bg-${s.color}-500/10 text-${s.color}-400 flex items-center justify-center shrink-0">
+                                <i class="fa-solid ${s.icon} text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-semibold text-white">${s.title}</div>
+                                <div id="${s.id ? 'strang2Subtext' : ''}" class="text-[10px] text-slate-400">${s.sub}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            ${s.id ? `<span id="strang2Badge" class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">OK</span>` : `<span class="text-[10px] font-medium text-slate-400 group-hover:text-brand-400 transition hidden sm:inline">Details</span>`}
+                            <i class="fa-solid fa-chevron-right text-xs text-slate-500 group-hover:text-brand-400 transition"></i>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            showToast(`Objekt gewechselt: ${data.name}`);
+        }
+
+        // Custom Toast Notification
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-12 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800/95 text-white text-xs px-4 py-2.5 rounded-full border border-slate-700 shadow-2xl flex items-center gap-2 transition-all duration-300 opacity-0 translate-y-[-10px]';
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-brand-400 text-sm"></i> <span>${message}</span>`;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', 'translate-y-[-10px]');
+            }, 50);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
